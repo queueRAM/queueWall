@@ -1,0 +1,27 @@
+                                   queueWall
+
+                                     README
+
+                                  version 0.00
+
+Contents
+1    Introduction
+1.a    What is queueWall?
+1.b    What environments does queueWall run in?
+
+1. Introduction
+
+1.a What is queueWall?
+
+ queueWall is a configurable desktop wallpaper changing utility.  It can cycle
+ wallpapers on a set schedule, randomly, or by file name.
+
+1.b What environments does queueWall run in?
+
+  Currently, queueWall is written in core python 2.5 and higher and runs under
+  the following desktop environments:
+     * Gnome
+     * XFCE >= 4.6.0
+     * LXDE (using pcmanfm)
+     * feh
+     * Windows XP
