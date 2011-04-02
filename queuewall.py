@@ -13,7 +13,7 @@ import time
 WALLPAPER_DIR = os.path.expanduser('~') + "/docs/images/wallpapers".replace("/", os.sep)
 IMAGE_EXTENSION = ".jpg"
 
-# Choose one of: autodetect, gnome, xfce, lxde, other
+# Choose one of: autodetect, gnome, xfce4, lxde, windows, other
 DESKTOP_ENV = "autodetect"
 
 ENABLE_LOGGING = False
@@ -32,10 +32,10 @@ class LinuxWallpaper(Wallpaper):
    def __init__(self, name):
       ################################ Commands ################################
       # The commands to run for each desktop environment.
-      # The first occurance of %s will be replaced with the path to the image file.
+      # The first occurrence of %s will be replaced with the path to the image
       self.COMMANDS = { "gnome" : "gconftool-2 --type str --set /desktop/gnome/background/picture_filename %s",
-                        # TODO: this only works with xfce >= 4.6.0 and assumes a screen an monitor
-                        "xfce"  : "xfconf-query -c xfce4-desktop -p /backdrop/screen0/monitor0/image-path -s %s",
+                        # TODO: this only works with xfce >= 4.6.0 and assumes a screen and monitor
+                        "xfce4"  : "xfconf-query -c xfce4-desktop -p /backdrop/screen0/monitor0/image-path -s %s",
                         "lxde"  : "pcmanfm --set-wallpaper=%s",
                         "other" : "feh --bg-scale %s" }
       if name == "autodetect":
@@ -45,7 +45,7 @@ class LinuxWallpaper(Wallpaper):
 
    def setWallpaper(self, file_path):
       if self.name in self.COMMANDS:
-         # find the command and replace "%s" with the path to the file
+         # lookup the command and replace "%s" with the path to the file
          command = self.COMMANDS[self.name] % file_path
          os.system(command)
          log("Setting wallpaper: " + file_path)
@@ -53,11 +53,11 @@ class LinuxWallpaper(Wallpaper):
          log(DESKTOP_ENV + " not in list of known commands")
          exit(1)
 
-   # detect which desktop environment is running
+   # attempt to detect the desktop environment that the user is running
    def detectEnvironment(self):
       DE_PROCESS_TABLE = { "gnome" : "gnome-session",
                            "xfce"  : "xfce-mcs-manage",
-                           "xfce"  : "xfce4-session",  # TODO: xfce4?
+                           "xfce4" : "xfce4-session",
                            "lxde"  : "lxsession" }
       for de in DE_PROCESS_TABLE.keys():
          # use pgrep to see if a process exists under that name
@@ -71,26 +71,30 @@ class WindowsWallpaper(Wallpaper):
    def __init__(self, name):
       self.name = name
       self.sysroot = os.environ['SYSTEMROOT']
+      self.userprofile = os.environ['USERPROFILE'] 
 
    def setWallpaper(self, file_path):
       if file_path.lower().endswith(".bmp"):
          image_path = file_path
       else:
-         # if image is not BMP, convert it to BMP first
+         # Windows only supports BMP images, so if the image is not BMP,
+         # convert it one first
          local_image_path = "Wallpaper1.bmp"
          if os.path.exists(local_image_path):
             log("Deleting: %s" % local_image_path)
             os.unlink(local_image_path)
+         # TODO: user ImageMagick's convert to support more formats?
          command = "djpeg -bmp -outfile \"%s\" \"%s\"" % (local_image_path, file_path)
          log("Running: %s" % command)
          os.system(command)
-         image_path = os.environ['USERPROFILE'] + "\\Local Settings\\Application Data\\Microsoft\\Wallpaper1.bmp"
+         image_path = self.userprofile + "\\Local Settings\\Application Data\\Microsoft\\Wallpaper1.bmp"
          log("Moving: %s => %s" % (local_image_path, image_path))
          if os.path.exists(image_path):
             log("Deleting: %s" % image_path)
             os.unlink(image_path)
          os.rename(local_image_path, image_path)
 
+      # TODO: stretch, center, or tile?
       command = "REG ADD \"HKCU\\Control Panel\\Desktop\" /V Wallpaper /T REG_SZ /F /D \"%s\"" % image_path
       os.system(command)
       # tell system to update immediately
