@@ -21,14 +21,14 @@ ENABLE_LOGGING = False
 
 
 #################################### Classes ###################################
-class Wallpaper(object):
+class DesktopEnvironment(object):
    def __init__(self, name):
       self.name = name
    def setWallpaper(self, path):
       print("Wallpaper: %s" % path)
       
 # Wallpaper setter for Linux (and other POSIX) family of operating systems
-class LinuxWallpaper(Wallpaper):
+class LinuxDE(DesktopEnvironment):
    def __init__(self, name):
       ################################ Commands ################################
       # The commands to run for each desktop environment.
@@ -67,7 +67,7 @@ class LinuxWallpaper(Wallpaper):
       return "other"
 
 # Wallpaper setter for Windows family of OSes
-class WindowsWallpaper(Wallpaper):
+class WindowsDE(DesktopEnvironment):
    def __init__(self, name):
       self.name = name
       self.sysroot = os.environ['SYSTEMROOT']
@@ -97,6 +97,9 @@ class WindowsWallpaper(Wallpaper):
       # TODO: stretch, center, or tile?
       command = "REG ADD \"HKCU\\Control Panel\\Desktop\" /V Wallpaper /T REG_SZ /F /D \"%s\"" % image_path
       os.system(command)
+      # stretch to fit
+      command = "REG ADD \"HKCU\\Control Panel\\Desktop\" /V WallpaperStyle /T REG_SZ /F /D 2"
+      os.system(command)
       # tell system to update immediately
       os.system(self.sysroot + "\\System32\\RUNDLL32.EXE user32.dll, UpdatePerUserSystemParameters")
       log("Setting wallpaper: " + image_path)
@@ -113,16 +116,16 @@ def currentDE():
    if DESKTOP_ENV == "autodetect":
       # posix
       if platform.system().lower().startswith("linux"):
-         de = LinuxWallpaper(DESKTOP_ENV)
-      # windows
+         de = LinuxDE(DESKTOP_ENV)
+      # assume windows
       else:
-         de = WindowsWallpaper("windows")
+         de = WindowsDE("windows")
       log("autodetected \"" + de.name + "\"")
    else:
       if DESKTOP_ENV == "windows":
-         de = WindowsWallpaper("windows")
+         de = WindowsDE("windows")
       else:
-         de = LinuxWallpaper(DESKTOP_ENV)
+         de = LinuxDE(DESKTOP_ENV)
 
    return de
 
@@ -132,16 +135,19 @@ if __name__ == "__main__":
 
    de = currentDE()
 
-   # loop forever, sleeping for 1 minute and checking the new hour
+   # loop forever
    while(1):
-      the_hour = time.localtime().tm_hour
-      # if the hour has rolled over
-      if last_hour != the_hour:
-         wallpaper = WALLPAPER_DIR + os.sep + "%02d" % the_hour + IMAGE_EXTENSION
+      the_time = time.localtime()
+      # if the hour has rolled over, or first time through
+      if last_hour != the_time.tm_hour:
+         wallpaper = WALLPAPER_DIR + os.sep + "%02d" % the_time.tm_hour + IMAGE_EXTENSION
          if os.path.exists(wallpaper):
             de.setWallpaper(wallpaper)
-            last_hour = the_hour
+            last_hour = the_time.tm_hour
          else:
             log("No wallpaper: " + wallpaper)
             last_hour = -1  # this forces a check next iteration
-      time.sleep(60)
+      else:
+         log("Woke up before scheduled: %d:%d:%d" % (the_time.tm_hour, the_time.tm_min, the_time.tm_sec))
+      # sleep until the next hour rollover
+      time.sleep(60 * (60 - the_time.tm_min) - the_time.tm_sec)
