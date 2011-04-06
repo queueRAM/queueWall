@@ -3,6 +3,7 @@
 import getpass
 import os
 import platform
+import select
 import subprocess
 import sys
 import threading
@@ -143,34 +144,80 @@ def changeWallpaper(de, ev):
    log("change: setting")
    ev.set()
 
+# command line input thread
+class CommandLineThread(threading.Thread):
+   def __init__(self, in_ev, out_ev, fifo):
+      self.in_ev = in_ev
+      self.out_ev = out_ev
+      self.fifo = fifo
+      threading.Thread.__init__(self)
+
+   def run(self):
+      command = ""
+      sys.stdout.write("queueWall> ")
+      timeout = 5
+      while(command != "exit"):
+         rlist, _, _ = select.select([sys.stdin], [], [], timeout)
+         if rlist:
+            command = sys.stdin.readline()
+            if(command == "help"):
+               print("Commands: exit, help, restart")
+            elif(command == "restart") or (command == "exit"):
+               self.fifo.append(command)
+               self.out_ev.set()
+            else:
+               print("Unknown command: %s" % command)
+            sys.stdout.write("queueWall> ")
+         elif self.in_ev.isSet():
+            return
+
 #################################### main ######################################
 if __name__ == "__main__":
-   last_hour = -1
+   run_command_line = False
 
    de = currentDE()
 
    # event flag to wait until thread completes
-   ev = threading.Event()
+   command_ev = threading.Event()
+   de_ev = threading.Event()
 
    # call first time through to ensure background for current time is set
-   changeWallpaper(de, ev)
+   changeWallpaper(de, command_ev)
 
-   # loop forever
+   # spawn command line thread
+   if run_command_line:
+      fifo = []
+      command_thread = CommandLineThread(command_ev, de_ev, fifo).start()
+
+   running = True
    try:
-      while(1):
+      while running:
          # clear event so it can be used again next time
-         ev.clear()
+         de_ev.clear()
          # sleep until the next hour rollover
          cur_time = time.localtime()
          # TODO: this is where the scheduler would figure out the delay
          delay_time = 60 * (60 - cur_time.tm_min) - cur_time.tm_sec
-         t = threading.Timer(delay_time, changeWallpaper, [de, ev])
+         t = threading.Timer(delay_time, changeWallpaper, [de, de_ev])
+         log("main: delay time: %d (s)" % delay_time)
          t.start()
          # wait until thread runs and signals its completion
          log("main: waiting")
-         ev.wait()
+         de_ev.wait()
          log("main: done waiting")
+         if run_command_line and (len(fifo)) > 0:
+            command = fifo.pop()
+            if(command == "exit"):
+               log("main: exitting...")
+               t.cancel()
+               running = False
+            elif(command == "restart"):
+               log("main: restarting...")
+               t.cancel()
+            elif(command != ""):
+               log("main: command: %s" % command)
    except KeyboardInterrupt:
+      command_ev.set()
       log("Handling KeyboardInterrupt.  Exiting...")
       # Cancel the pending thread.  This can be called even if it has already started.
       t.cancel()
