@@ -5,6 +5,7 @@ import os
 import platform
 import subprocess
 import sys
+import threading
 import time
 
 ################################ CONFIGURATION #################################
@@ -129,25 +130,48 @@ def currentDE():
 
    return de
 
+def changeWallpaper(de, ev):
+   cur_time = time.localtime()
+   imagename = "%02d" % cur_time.tm_hour + IMAGE_EXTENSION
+   # if the hour has rolled over, or first time through
+   wallpaper = WALLPAPER_DIR + os.sep + imagename
+   if os.path.exists(wallpaper):
+      de.setWallpaper(wallpaper)
+   else:
+      log("No wallpaper: " + wallpaper)
+   # signal the event so the main thread knows this has completed
+   log("change: setting")
+   ev.set()
+
 #################################### main ######################################
 if __name__ == "__main__":
    last_hour = -1
 
    de = currentDE()
 
+   # event flag to wait until thread completes
+   ev = threading.Event()
+
+   # call first time through to ensure background for current time is set
+   changeWallpaper(de, ev)
+
    # loop forever
-   while(1):
-      the_time = time.localtime()
-      # if the hour has rolled over, or first time through
-      if last_hour != the_time.tm_hour:
-         wallpaper = WALLPAPER_DIR + os.sep + "%02d" % the_time.tm_hour + IMAGE_EXTENSION
-         if os.path.exists(wallpaper):
-            de.setWallpaper(wallpaper)
-            last_hour = the_time.tm_hour
-         else:
-            log("No wallpaper: " + wallpaper)
-            last_hour = -1  # this forces a check next iteration
-      else:
-         log("Woke up before scheduled: %d:%d:%d" % (the_time.tm_hour, the_time.tm_min, the_time.tm_sec))
-      # sleep until the next hour rollover
-      time.sleep(60 * (60 - the_time.tm_min) - the_time.tm_sec)
+   try:
+      while(1):
+         # clear event so it can be used again next time
+         ev.clear()
+         # sleep until the next hour rollover
+         cur_time = time.localtime()
+         # TODO: this is where the scheduler would figure out the delay
+         delay_time = 60 * (60 - cur_time.tm_min) - cur_time.tm_sec
+         t = threading.Timer(delay_time, changeWallpaper, [de, ev])
+         t.start()
+         # wait until thread runs and signals its completion
+         log("main: waiting")
+         ev.wait()
+         log("main: done waiting")
+   except KeyboardInterrupt:
+      log("Handling KeyboardInterrupt.  Exiting...")
+      # Cancel the pending thread.  This can be called even if it has already started.
+      t.cancel()
+
