@@ -155,21 +155,21 @@ def changeWallpaper(options, de, ev):
 
 # command line input thread
 class CommandLineThread(threading.Thread):
-   def __init__(self, in_ev, out_ev, fifo):
-      self.in_ev = in_ev
+   def __init__(self, out_ev, fifo):
       self.out_ev = out_ev
       self.fifo = fifo
       threading.Thread.__init__(self)
 
    def run(self):
       command = ""
-      sys.stdout.write("queueWall> ")
-      sys.stdout.flush()
-      timeout = 1
       while(command != "exit"):
-         rlist, _, _ = select.select([sys.stdin], [], [], timeout)
-         if rlist:
-            command = sys.stdin.readline().strip()
+         try:
+            # python devs decided to rename raw_input() to input() in 3.x 
+            # for no apparent reason.
+            if sys.version_info < (3, 0):
+               command = raw_input("queueWall> ")
+            else:
+               command = input("queueWall> ")
             if(command == "help"):
                print("Commands: exit, help, restart")
             elif(command == "restart") or (command == "exit"):
@@ -177,10 +177,10 @@ class CommandLineThread(threading.Thread):
                self.out_ev.set()
             else:
                print("Unknown command: %s" % command)
-            sys.stdout.write("queueWall> ")
-            sys.stdout.flush()
-         elif self.in_ev.isSet():
+         except EOFError:
             command = "exit"
+            self.fifo.append(command)
+            self.out_ev.set()
       print("")
       log("CommandLine returning...")
 
@@ -210,7 +210,6 @@ if __name__ == "__main__":
       de.setCommand(options.command)
 
    # event flag to wait until thread completes
-   command_ev = threading.Event()
    de_ev = threading.Event()
 
    # call first time through to ensure background for current time is set
@@ -219,7 +218,7 @@ if __name__ == "__main__":
    # spawn command line thread
    if options.terminal:
       fifo = []
-      command_thread = CommandLineThread(command_ev, de_ev, fifo).start()
+      command_thread = CommandLineThread(de_ev, fifo).start()
 
    running = True
    try:
@@ -249,7 +248,6 @@ if __name__ == "__main__":
             elif(command != ""):
                log("main: command: %s" % command)
    except KeyboardInterrupt:
-      command_ev.set()
       print("Handling KeyboardInterrupt.  Exiting...")
       # Cancel the pending thread.  This can be called even if it has already started.
       t.cancel()
