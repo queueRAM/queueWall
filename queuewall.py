@@ -18,6 +18,8 @@ DEFAULT_WALLPAPER_DIR = os.path.expanduser('~') + "/docs/images/wallpapers".repl
 
 DEFAULT_IMAGE_EXTENSION = "jpg"
 
+# interval between image changes (in minutes)
+DEFAULT_INTERVAL = 60
 ########################### END DEFAULT CONFIGURATION #######################
 
 
@@ -200,6 +202,8 @@ if __name__ == "__main__":
                      default=DEFAULT_WALLPAPER_DIR)
    parser.add_option("-e", "--extension", help="image extension [default: %default]", \
                      default=DEFAULT_IMAGE_EXTENSION)
+   parser.add_option("-i", "--interval", help="interval between image rotations (in min) [default: %default]", \
+                     type="int", default=DEFAULT_INTERVAL)
    parser.add_option("-l", "--log", action="store_true", \
                      help="enable logging", default=False)
    parser.add_option("-r", "--random", action="store_true", \
@@ -237,7 +241,12 @@ if __name__ == "__main__":
          # sleep until the next hour rollover
          cur_time = time.localtime()
          # TODO: this is where the scheduler would figure out the delay
-         delay_time = 60 * (60 - cur_time.tm_min) - cur_time.tm_sec
+         if options.interval == 60:
+            # if set to default 60, make it change on the hour
+            delay_time = 60 * (60 - cur_time.tm_min) - cur_time.tm_sec
+         else:
+            # don't worry about the time, just delay the requested interval
+            delay_time = 60 * options.interval
          t = threading.Timer(delay_time, changeWallpaper, [options, de, de_ev])
          log("main: delay time: %d (s)" % delay_time)
          t.start()
