@@ -4,6 +4,7 @@ import getpass
 import optparse
 import os
 import platform
+import random
 import select
 import subprocess
 import sys
@@ -141,9 +142,15 @@ def currentDE(name):
    return de
 
 def changeWallpaper(options, de, ev):
-   cur_time = time.localtime()
-   imagename = "%02d" % cur_time.tm_hour + "." + options.extension
-   # if the hour has rolled over, or first time through
+   if options.random:
+      # get list of images
+      dir_list = os.listdir(options.directory)
+      # pick random one
+      imagename = random.choice(dir_list)
+   else:
+      # select image based on time
+      cur_time = time.localtime()
+      imagename = "%02d" % cur_time.tm_hour + "." + options.extension
    wallpaper = options.directory + os.sep + imagename
    if os.path.exists(wallpaper):
       de.setWallpaper(wallpaper)
@@ -195,6 +202,8 @@ if __name__ == "__main__":
                      default=DEFAULT_IMAGE_EXTENSION)
    parser.add_option("-l", "--log", action="store_true", \
                      help="enable logging", default=False)
+   parser.add_option("-r", "--random", action="store_true", \
+                     help="use random image from directory", default=False)
    parser.add_option("-s", "--system", help="currently running system: autodetect, gnome, xfce4, lxde, windows [default: %default]", \
                      default="autodetect")
    parser.add_option("-t", "--terminal", action="store_true", \
