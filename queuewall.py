@@ -105,11 +105,13 @@ class WindowsDE(DesktopEnvironment):
          os.rename(local_image_path, image_path)
 
       # TODO: stretch, center, or tile?
-      command = "REG ADD \"HKCU\\Control Panel\\Desktop\" /V Wallpaper /T REG_SZ /F /D \"%s\"" % image_path
-      os.system(command)
+      command = "REG ADD \"HKCU\\Control Panel\\Desktop\" /V Wallpaper /T REG_SZ /F /D \"%s\" >NUL 2>&1" % image_path
+      if os.system(command) != 0:
+         log("Error running REG ADD")
       # stretch to fit
-      command = "REG ADD \"HKCU\\Control Panel\\Desktop\" /V WallpaperStyle /T REG_SZ /F /D 2"
-      os.system(command)
+      command = "REG ADD \"HKCU\\Control Panel\\Desktop\" /V WallpaperStyle /T REG_SZ /F /D 2 >NUL 2>&1"
+      if os.system(command) != 0:
+         log("Error running REG ADD")
       # tell system to update immediately
       os.system(self.sysroot + "\\System32\\RUNDLL32.EXE user32.dll, UpdatePerUserSystemParameters")
       log("Setting wallpaper: " + image_path)
