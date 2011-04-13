@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 import getpass
-import optparse
+import optparse # TODO: deprecated since 2.7 - use argparse (new in 2.7).
 import os
 import platform
 import random
@@ -11,17 +11,56 @@ import sys
 import threading
 import time
 
+# python devs decided to rename some modules because it looks pretty
+if sys.version_info < (3, 0):
+   import ConfigParser
+   configparser = ConfigParser
+else:
+   import configparser
+
 ##################### DEFAULT CONFIGURATION #################################
 # This directory should contain images that are named the hour (0-23) of the day
 # e.g. midnight = 00.jpg, 7AM = 07.jpg, noon = 12.jpg, 5PM = 17.jpg
-DEFAULT_WALLPAPER_DIR = os.path.expanduser('~') + "/docs/images/wallpapers".replace("/", os.sep)
+DEFAULT_WALLPAPER_DIR = os.path.join(os.path.expanduser('~'), "docs", "images", "wallpapers")
 
+# image extension to use for time-based schedules
+# TODO: this shouldn't be needed.  find a way to avoid it
 DEFAULT_IMAGE_EXTENSION = "jpg"
 
 # interval between image changes (in minutes)
 DEFAULT_INTERVAL = 60
+
+# scheduler types: hourly, daily, imagename, custom
+# TODO: currently unsupported
+DEFAULT_SCHEDULE = "hourly"
 ########################### END DEFAULT CONFIGURATION #######################
 
+# Instantiate the Config File Parser
+queuewall_config = configparser.RawConfigParser()
+
+# set the default configuration
+queuewall_config.add_section("Configuration")
+queuewall_config.add_section("Directories")
+queuewall_config.add_section("Schedule")
+
+# main configuration
+queuewall_config.set("Configuration", "command",  "")
+queuewall_config.set("Configuration", "log",      "False")
+queuewall_config.set("Configuration", "random",   "False")
+queuewall_config.set("Configuration", "system",   "autodetect")
+queuewall_config.set("Configuration", "terminal", "False")
+
+# directory options
+queuewall_config.set("Directories", "wallpaper_dirs",  DEFAULT_WALLPAPER_DIR)
+queuewall_config.set("Directories", "image_extension", DEFAULT_IMAGE_EXTENSION)
+
+# scheduler options
+queuewall_config.set("Schedule", "interval",   DEFAULT_INTERVAL)
+queuewall_config.set("Schedule", "sched_type", DEFAULT_SCHEDULE)
+
+queuewall_config_file = os.path.join(os.path.expanduser('~'), 
+                                     ".config", "queueWall", "config.rc")
+queuewall_config.read(queuewall_config_file)
 
 #################################### Classes ###################################
 class DesktopEnvironment(object):
@@ -197,23 +236,31 @@ class CommandLineThread(threading.Thread):
 
 #################################### main ######################################
 if __name__ == "__main__":
-   parser = optparse.OptionParser(usage="%prog [options]", \
-                                  version="%prog 0.00")
+   # command line arguments will override config file
+   parser = optparse.OptionParser(usage="%prog [options]", version="%prog 0.00")
    parser.add_option("-c", "--command", help="custom command to change wallpaper [example: \"feh --bg-scale %s\"]")
-   parser.add_option("-d", "--directory", help="wallpapers directory [default: %default]", \
-                     default=DEFAULT_WALLPAPER_DIR)
-   parser.add_option("-e", "--extension", help="image extension [default: %default]", \
-                     default=DEFAULT_IMAGE_EXTENSION)
-   parser.add_option("-i", "--interval", help="interval between image rotations (in min) [default: %default]", \
-                     type="int", default=DEFAULT_INTERVAL)
-   parser.add_option("-l", "--log", action="store_true", \
-                     help="enable logging", default=False)
-   parser.add_option("-r", "--random", action="store_true", \
-                     help="use random image from directory", default=False)
-   parser.add_option("-s", "--system", help="currently running system: autodetect, gnome, xfce4, lxde, windows [default: %default]", \
-                     default="autodetect")
-   parser.add_option("-t", "--terminal", action="store_true", \
-                     help="allow commands to be entered from terminal", default=False)
+   parser.add_option("-d", "--directory",
+                     help="wallpapers directory [default: %default]", 
+                     default=queuewall_config.get("Directories", "wallpaper_dirs"))
+   parser.add_option("-e", "--extension",
+                     help="image extension [default: %default]",
+                     default=queuewall_config.get("Directories", "image_extension"))
+   parser.add_option("-i", "--interval",
+                     help="interval between image rotations (in min) [default: %default]",
+                     type="int",
+                     default=queuewall_config.getint("Schedule", "interval"))
+   parser.add_option("-l", "--log", action="store_true",
+                     help="enable logging",
+                     default=queuewall_config.getboolean("Configuration", "log"))
+   parser.add_option("-r", "--random", action="store_true",
+                     help="use random image from directory",
+                     default=queuewall_config.getboolean("Configuration", "random"))
+   parser.add_option("-s", "--system",
+                     help="currently running system: autodetect, gnome, xfce4, lxde, windows [default: %default]",
+                     default=queuewall_config.get("Configuration", "system"))
+   parser.add_option("-t", "--terminal", action="store_true",
+                     help="allow commands to be entered from terminal [default: %default]",
+                     default=queuewall_config.getboolean("Configuration", "terminal"))
 
    (options, args) = parser.parse_args()
 
