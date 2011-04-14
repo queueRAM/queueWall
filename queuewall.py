@@ -221,8 +221,8 @@ class CommandLineThread(threading.Thread):
             else:
                command = input("queueWall> ")
             if(command == "help"):
-               print("Commands: exit, help, restart")
-            elif(command == "restart") or (command == "exit"):
+               print("Commands: exit, help, reload, restart")
+            elif(command == "reload") or (command == "restart") or (command == "exit"):
                self.fifo.append(command)
                self.out_ev.set()
             else:
@@ -238,7 +238,8 @@ class CommandLineThread(threading.Thread):
 if __name__ == "__main__":
    # command line arguments will override config file
    parser = optparse.OptionParser(usage="%prog [options]", version="%prog 0.00")
-   parser.add_option("-c", "--command", help="custom command to change wallpaper [example: \"feh --bg-scale %s\"]")
+   parser.add_option("-c", "--command", help="custom command to change wallpaper [example: \"feh --bg-scale %s\"]",
+                     default=queuewall_config.get("Configuration", "command"))
    parser.add_option("-d", "--directory",
                      help="wallpapers directory [default: %default]", 
                      default=queuewall_config.get("Directories", "wallpaper_dirs"))
@@ -267,7 +268,7 @@ if __name__ == "__main__":
    logInit(options.log)
 
    de = currentDE(options.system)
-   if options.command != None:
+   if options.command != "":
       log("Using command: %s" % options.command)
       de.setCommand(options.command)
 
@@ -312,6 +313,10 @@ if __name__ == "__main__":
             elif(command == "restart"):
                log("main: restarting...")
                t.cancel()
+            elif(command == "reload"):
+               log("main: reloading...")
+               t.cancel()
+               changeWallpaper(options, de, de_ev)
             elif(command != ""):
                log("main: command: %s" % command)
    except KeyboardInterrupt:
