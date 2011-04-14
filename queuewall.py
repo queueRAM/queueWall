@@ -10,6 +10,7 @@ import subprocess
 import sys
 import threading
 import time
+import tempfile
 
 # python devs decided to rename some modules because it looks pretty
 if sys.version_info < (3, 0):
@@ -33,6 +34,9 @@ DEFAULT_INTERVAL = 60
 # scheduler types: hourly, daily, imagename, custom
 # TODO: currently unsupported
 DEFAULT_SCHEDULE = "hourly"
+
+# default temporary directory to work convert images in
+DEFAULT_TEMP_DIR = "None"
 ########################### END DEFAULT CONFIGURATION #######################
 
 # Instantiate the Config File Parser
@@ -44,11 +48,13 @@ queuewall_config.add_section("Directories")
 queuewall_config.add_section("Schedule")
 
 # main configuration
+queuewall_config.set("Configuration", "caption",  "False")
 queuewall_config.set("Configuration", "command",  "")
 queuewall_config.set("Configuration", "log",      "False")
 queuewall_config.set("Configuration", "random",   "False")
 queuewall_config.set("Configuration", "system",   "autodetect")
 queuewall_config.set("Configuration", "terminal", "False")
+queuewall_config.set("Configuration", "temp_dir", DEFAULT_TEMP_DIR)
 
 # directory options
 queuewall_config.set("Directories", "wallpaper_dirs",  DEFAULT_WALLPAPER_DIR)
@@ -132,7 +138,7 @@ class WindowsDE(DesktopEnvironment):
          if os.path.exists(local_image_path):
             log("Deleting: %s" % local_image_path)
             os.unlink(local_image_path)
-         # TODO: user ImageMagick's convert to support more formats?
+         # TODO: use ImageMagick's convert to support more formats?
          command = "djpeg -bmp -outfile \"%s\" \"%s\"" % (local_image_path, file_path)
          log("Running: %s" % command)
          os.system(command)
@@ -184,6 +190,21 @@ def currentDE(name):
 
    return de
 
+def applyCaption(options, wallpaper_image):
+   # use ImageMagick to apply caption
+   temp_file = os.path.join(options.temp_dir, os.path.basename(wallpaper_image) + ".caption.jpg")
+   new_file  = os.path.join(options.temp_dir, os.path.basename(wallpaper_image) + ".composite.jpg")
+   caption = os.path.splitext(os.path.basename(wallpaper_image))[0]
+   log("Creating label: %s" % temp_file)
+   command = "convert -size 300x28 -background \"#00000080\" -fill white label:\" %s \" \"miff:%s\"" % (caption, temp_file)
+   os.system(command)
+   log("Compositing: %s + %s => %s" % (temp_file, wallpaper_image, new_file))
+   command = "composite -gravity south -geometry +0+50 \"%s\" \"%s\" \"%s\"" % (temp_file, wallpaper_image, new_file)
+   os.system(command)
+   log("Deleting: %s" % temp_file)
+   os.unlink(temp_file)
+   return new_file
+
 def changeWallpaper(options, de, ev):
    if options.random:
       # get list of images
@@ -196,6 +217,9 @@ def changeWallpaper(options, de, ev):
       imagename = "%02d" % cur_time.tm_hour + "." + options.extension
    wallpaper = options.directory + os.sep + imagename
    if os.path.exists(wallpaper):
+      # check if we need to apply a caption
+      if options.caption:
+         wallpaper = applyCaption(options, wallpaper)
       de.setWallpaper(wallpaper)
    else:
       log("No wallpaper: " + wallpaper)
@@ -240,6 +264,9 @@ if __name__ == "__main__":
    parser = optparse.OptionParser(usage="%prog [options]", version="%prog 0.00")
    parser.add_option("-c", "--command", help="custom command to change wallpaper [example: \"feh --bg-scale %s\"]",
                      default=queuewall_config.get("Configuration", "command"))
+   parser.add_option("-C", "--caption", action="store_true",
+                     help="Add caption with name of file before displaying",
+                     default=queuewall_config.getboolean("Configuration", "caption"))
    parser.add_option("-d", "--directory",
                      help="wallpapers directory [default: %default]", 
                      default=queuewall_config.get("Directories", "wallpaper_dirs"))
@@ -262,10 +289,16 @@ if __name__ == "__main__":
    parser.add_option("-t", "--terminal", action="store_true",
                      help="allow commands to be entered from terminal [default: %default]",
                      default=queuewall_config.getboolean("Configuration", "terminal"))
+   parser.add_option("-T", "--temp_dir",
+                     help="temporary directory to use for file conversions",
+                     default=queuewall_config.get("Configuration", "temp_dir"))
 
    (options, args) = parser.parse_args()
 
    logInit(options.log)
+
+   if options.temp_dir == DEFAULT_TEMP_DIR:
+      options.temp_dir = tempfile.mkdtemp(prefix="queuewall")
 
    de = currentDE(options.system)
    if options.command != "":
